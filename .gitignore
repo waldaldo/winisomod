@@ -1,0 +1,10 @@
+# Directorios de trabajo temporales
+/tmp/
+win11mod-*/
+iso-orig/
+iso-mod/
+wim-mount/
+
+# ISOs generadas (archivos grandes)
+*.iso
+
