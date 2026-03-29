@@ -607,7 +607,7 @@ step "PASO 10 — Generar ISO final (puede tardar 5-15 minutos)"
 # Verificar espacio en destino
 ISO_DEST_DIR=$(dirname "$ISO_DESTINO")
 DEST_FREE_GB=$(df -BG "$ISO_DEST_DIR" | tail -1 | awk '{print $4}' | tr -d 'G')
-ISO_MOD_GB=$(du -sG "$DIR_ISO_MOD" | awk '{print $1}')
+ISO_MOD_GB=$(du -s -BG "$DIR_ISO_MOD" | awk '{print $1}' | tr -d 'G')
 
 if [[ -n "$DEST_FREE_GB" && -n "$ISO_MOD_GB" ]] 2>/dev/null; then
     if [[ "$DEST_FREE_GB" -lt "$ISO_MOD_GB" ]]; then
