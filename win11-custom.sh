@@ -387,11 +387,12 @@ else
     warn "OneDriveSetup.exe en SysWOW64 no encontrado (puede ser normal)"
 fi
 
-## 5b — Registro: deshabilitar telemetría, Cortana, OneDrive
-info "Creando archivo de registro anti-telemetría..."
+## 5b — Registro: telemetría, Cortana, OneDrive, Widgets, Copilot, barra de tareas
+info "Creando archivo de registro de privacidad y UI..."
 cat > "${DIR_WIM_MOUNT}/Windows/Setup/Scripts/no-telemetry.reg" << 'REGEOF'
 Windows Registry Editor Version 5.00
 
+; ── Telemetría ──────────────────────────────────────────────────────────────
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\DataCollection]
 "AllowTelemetry"=dword:00000000
 "DoNotShowFeedbackNotifications"=dword:00000001
@@ -405,18 +406,33 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\dmwappushservice]
 "Start"=dword:00000004
 
+; ── Cortana ──────────────────────────────────────────────────────────────────
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Windows Search]
 "AllowCortana"=dword:00000000
 
+; ── OneDrive ─────────────────────────────────────────────────────────────────
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\OneDrive]
 "DisableFileSyncNGSC"=dword:00000001
 "DisableLibrariesDefaultSaveToOneDrive"=dword:00000001
+"PreventNetworkTrafficPreUserSignIn"=dword:00000001
 
+; ── Publicidad ───────────────────────────────────────────────────────────────
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo]
 "DisabledByGroupPolicy"=dword:00000001
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform]
 "NoGenTicket"=dword:00000001
+
+; ── Widgets (News and Interests) ─────────────────────────────────────────────
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Dsh]
+"AllowNewsAndInterests"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\default\NewsAndInterests\AllowNewsAndInterests]
+"value"=dword:00000000
+
+; ── Copilot ──────────────────────────────────────────────────────────────────
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot]
+"TurnOffWindowsCopilot"=dword:00000001
 REGEOF
 
 log "Archivo .reg creado"
@@ -426,30 +442,77 @@ info "Creando SetupComplete.cmd..."
 cat > "${DIR_WIM_MOUNT}/Windows/Setup/Scripts/SetupComplete.cmd" << 'CMDEOF'
 @echo off
 
-:: Aplicar registro de telemetría/privacidad
+:: ── Aplicar políticas de privacidad y UI ─────────────────────────────────────
 regedit /s C:\Windows\Setup\Scripts\no-telemetry.reg
 
-:: Deshabilitar servicios de telemetría
+:: ── Telemetría ────────────────────────────────────────────────────────────────
 sc config DiagTrack start= disabled
-sc stop DiagTrack
+sc stop DiagTrack 2>nul
 sc config dmwappushservice start= disabled
-sc stop dmwappushservice
-
-:: Deshabilitar búsqueda de Cortana
-reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f
-
-:: Deshabilitar OneDrive
-reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /v DisableFileSyncNGSC /t REG_DWORD /d 1 /f
-
-:: Desinstalar OneDrive si se instaló igual
-%SystemRoot%\System32\OneDriveSetup.exe /uninstall 2>nul
-%SystemRoot%\SysWOW64\OneDriveSetup.exe /uninstall 2>nul
-
-:: Deshabilitar telemetría vía GPO
+sc stop dmwappushservice 2>nul
 reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f
 
-:: Deshabilitar publicidad personalizada
+:: ── Cortana ───────────────────────────────────────────────────────────────────
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f
+
+:: ── OneDrive: deshabilitar política ──────────────────────────────────────────
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /v DisableFileSyncNGSC /t REG_DWORD /d 1 /f
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /v PreventNetworkTrafficPreUserSignIn /t REG_DWORD /d 1 /f
+
+:: ── OneDrive: desinstalar proceso y paquete provisionado ─────────────────────
+%SystemRoot%\System32\OneDriveSetup.exe /uninstall 2>nul
+%SystemRoot%\SysWOW64\OneDriveSetup.exe /uninstall 2>nul
+PowerShell -NoProfile -NonInteractive -Command "Get-AppxProvisionedPackage -Online | Where-Object {$_.DisplayName -like '*OneDrive*'} | Remove-AppxProvisionedPackage -Online" 2>nul
+PowerShell -NoProfile -NonInteractive -Command "Get-AppxPackage -AllUsers *OneDrive* | Remove-AppxPackage -AllUsers" 2>nul
+
+:: ── Widgets ───────────────────────────────────────────────────────────────────
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f
+PowerShell -NoProfile -NonInteractive -Command "Get-AppxProvisionedPackage -Online | Where-Object {$_.DisplayName -like '*WebExperience*'} | Remove-AppxProvisionedPackage -Online" 2>nul
+
+:: ── Copilot ───────────────────────────────────────────────────────────────────
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f
+
+:: ── Publicidad personalizada ──────────────────────────────────────────────────
 reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" /v DisabledByGroupPolicy /t REG_DWORD /d 1 /f
+
+:: ── Perfil de usuario predeterminado: animaciones, transparencias, barra ──────
+:: Cargamos el hive del usuario Default para que aplique a todos los usuarios nuevos
+reg load "HKU\WinCustomDefault" "C:\Users\Default\NTUSER.DAT"
+
+:: Rendimiento visual: modo "ajustar para mejor rendimiento" con fuentes suaves
+reg add "HKU\WinCustomDefault\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 3 /f
+
+:: Desactivar animaciones individuales (UserPreferencesMask)
+reg add "HKU\WinCustomDefault\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f
+reg add "HKU\WinCustomDefault\Control Panel\Desktop" /v MinAnimate /t REG_SZ /d "0" /f
+reg add "HKU\WinCustomDefault\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d "0" /f
+
+:: Desactivar transparencias
+reg add "HKU\WinCustomDefault\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f
+
+:: Ocultar botón de búsqueda de la barra de tareas (0=oculto, 1=ícono, 2=cuadro)
+reg add "HKU\WinCustomDefault\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f
+
+:: Ocultar botón de Task View de la barra de tareas
+reg add "HKU\WinCustomDefault\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowTaskViewButton /t REG_DWORD /d 0 /f
+
+:: Ocultar botón de Widgets de la barra de tareas
+reg add "HKU\WinCustomDefault\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarDa /t REG_DWORD /d 0 /f
+
+:: Ocultar botón de Copilot de la barra de tareas
+reg add "HKU\WinCustomDefault\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowCopilotButton /t REG_DWORD /d 0 /f
+
+:: Menú Inicio alineado a la izquierda (0=izquierda, 1=centro)
+reg add "HKU\WinCustomDefault\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarAl /t REG_DWORD /d 0 /f
+
+:: Desactivar sugerencias y apps recomendadas en el menú Inicio
+reg add "HKU\WinCustomDefault\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Start_IrisRecommendations /t REG_DWORD /d 0 /f
+reg add "HKU\WinCustomDefault\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f
+reg add "HKU\WinCustomDefault\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f
+reg add "HKU\WinCustomDefault\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SoftLandingEnabled /t REG_DWORD /d 0 /f
+
+:: Descargar el hive
+reg unload "HKU\WinCustomDefault"
 
 echo [win11-custom] SetupComplete finalizado >> C:\Windows\Temp\setup-custom.log
 CMDEOF

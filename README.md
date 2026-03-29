@@ -16,13 +16,26 @@ configuración manual post-instalación.
 A partir de un ISO oficial de Windows 11, genera uno nuevo con las siguientes
 modificaciones aplicadas:
 
+**Privacidad y servicios**
 - **Cuenta local preconfigurada** — sin necesidad de cuenta Microsoft
 - **OOBE omitido** — la instalación no pide Wi-Fi, cuenta online ni telemetría
 - **Telemetría deshabilitada** — servicios `DiagTrack` y `dmwappushservice`
   desactivados por política de grupo
 - **Cortana deshabilitada** — sin búsqueda en la nube
-- **OneDrive eliminado** — binarios removidos del WIM y desinstalado en el
-  primer arranque
+- **OneDrive eliminado** — binarios removidos del WIM, paquete provisionado
+  desinstalado y política de bloqueo aplicada en el primer arranque
+- **Copilot deshabilitado** — por política de grupo y botón de barra eliminado
+
+**Rendimiento y UI**
+- **Animaciones desactivadas** — sin efectos visuales innecesarios
+- **Transparencias desactivadas** — interfaz sólida, menor consumo de GPU
+- **Widgets eliminados** — sin panel de noticias ni botón en la barra de tareas
+- **Búsqueda de la barra de tareas oculta** — icono eliminado de la taskbar
+- **Task View oculto** — botón eliminado de la barra de tareas
+- **Menú Inicio alineado a la izquierda** — disposición clásica
+- **Sugerencias del menú Inicio desactivadas** — sin apps recomendadas
+
+**Compatibilidad**
 - **Bypass de requisitos de hardware** — TPM 2.0, Secure Boot, RAM mínima,
   CPU y almacenamiento ignorados por el instalador (`labconfig.ini`)
 - **Instalación desatendida** — `autounattend.xml` generado con nombre de
@@ -105,9 +118,9 @@ Montar ISO (loop, ro) → Copiar contenido
     │
     ▼
 Montar install.wim (wimlib, FUSE)
-    ├── Eliminar OneDriveSetup.exe
-    ├── Escribir no-telemetry.reg
-    └── Escribir SetupComplete.cmd
+    ├── Eliminar OneDriveSetup.exe (System32 + SysWOW64)
+    ├── Escribir no-telemetry.reg  (telemetría, OneDrive, Widgets, Copilot)
+    └── Escribir SetupComplete.cmd (desinstalación AppX, tweaks UI, perfil default)
     │
     ▼
 Desmontar WIM y guardar cambios
